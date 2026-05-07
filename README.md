@@ -75,7 +75,7 @@ npm start
 
 You can keep using environment variables as defaults, then change the client ID, client secret, and
 expected ID Number directly in the `Connection` section of the UI. Those UI overrides are stored only
-in memory for the current server run and reset when you restart the app or click `Reset to env defaults`.
+in memory for the current server run and reset when you restart the app or click `Clear session credentials`.
 
 ## Suggested first test
 
