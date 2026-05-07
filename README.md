@@ -25,6 +25,8 @@ Security model:
   interactive API docs console
 - use sandbox, scoped, revocable credentials for this mode
 - direct browser calls require Signicat's API and token endpoints to allow CORS for the Pages origin
+- static mode limits this page to 2 concurrent Signicat requests and 30 Signicat requests per
+  browser session per minute to reduce accidental hammering
 
 To publish the static version, configure GitHub Pages to serve the `public/` directory, then open
 `index.html`. The app automatically switches to static browser mode on `*.github.io`, and callback
@@ -32,6 +34,10 @@ URLs use `callback.html` so project subpaths work correctly.
 
 If Signicat blocks direct browser requests with CORS, keep using the Node server locally or deploy a
 small backend proxy that keeps credentials server-side.
+
+These browser-side limits are not a DDoS protection boundary. A determined actor can bypass static
+site JavaScript and call Signicat directly with their own scripts or tools. Real abuse protection has
+to come from Signicat-side quotas/rate limits, scoped credentials, or a backend proxy you control.
 
 ## Why this app is useful
 

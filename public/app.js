@@ -3,9 +3,16 @@ const state = {
   settings: null,
   apiMode: "server",
   staticAuth: null,
+  activeStaticRequests: 0,
+  lastStaticRequestAt: 0,
 };
 
 const SESSION_STORAGE_KEY = "videoidSandboxSession";
+const RATE_STORAGE_KEY = "videoidSandboxRateWindow";
+const STATIC_MAX_CONCURRENT_REQUESTS = 2;
+const STATIC_MIN_REQUEST_GAP_MS = 750;
+const STATIC_RATE_WINDOW_MS = 60_000;
+const STATIC_RATE_WINDOW_LIMIT = 30;
 
 const starterConfig = {
   pageTitle: "VideoID Sandbox Demo",
@@ -318,6 +325,58 @@ function readJsonResponse(response) {
   return response.text();
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function loadRateWindow() {
+  try {
+    const windowState = JSON.parse(sessionStorage.getItem(RATE_STORAGE_KEY) || "{}");
+    if (
+      !windowState.startedAt ||
+      !Number.isFinite(windowState.count) ||
+      Date.now() - windowState.startedAt > STATIC_RATE_WINDOW_MS
+    ) {
+      return { startedAt: Date.now(), count: 0 };
+    }
+    return windowState;
+  } catch (_error) {
+    return { startedAt: Date.now(), count: 0 };
+  }
+}
+
+function saveRateWindow(windowState) {
+  sessionStorage.setItem(RATE_STORAGE_KEY, JSON.stringify(windowState));
+}
+
+async function waitForStaticRequestSlot() {
+  while (state.activeStaticRequests >= STATIC_MAX_CONCURRENT_REQUESTS) {
+    await sleep(250);
+  }
+
+  const sinceLastRequest = Date.now() - state.lastStaticRequestAt;
+  if (sinceLastRequest < STATIC_MIN_REQUEST_GAP_MS) {
+    await sleep(STATIC_MIN_REQUEST_GAP_MS - sinceLastRequest);
+  }
+
+  const windowState = loadRateWindow();
+  if (windowState.count >= STATIC_RATE_WINDOW_LIMIT) {
+    const retryAfterMs = Math.max(0, STATIC_RATE_WINDOW_MS - (Date.now() - windowState.startedAt));
+    throw new Error(
+      `Static mode request limit reached. Wait ${Math.ceil(retryAfterMs / 1000)} seconds before calling Signicat again.`
+    );
+  }
+
+  windowState.count += 1;
+  saveRateWindow(windowState);
+  state.activeStaticRequests += 1;
+  state.lastStaticRequestAt = Date.now();
+
+  return () => {
+    state.activeStaticRequests = Math.max(0, state.activeStaticRequests - 1);
+  };
+}
+
 async function getStaticAccessToken() {
   const auth = state.staticAuth || loadStaticAuth();
   state.staticAuth = auth;
@@ -337,19 +396,26 @@ async function getStaticAccessToken() {
     throw new Error("Missing browser-session Signicat client ID or client secret.");
   }
 
-  const response = await fetch(`${getStaticApiBaseUrl()}/auth/open/connect/token`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${btoa(`${auth.clientId}:${auth.clientSecret}`)}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      scope: "signicat-api",
-    }).toString(),
-  });
-  const payload = await readJsonResponse(response);
+  const releaseSlot = await waitForStaticRequestSlot();
+  let response;
+  let payload;
+  try {
+    response = await fetch(`${getStaticApiBaseUrl()}/auth/open/connect/token`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${btoa(`${auth.clientId}:${auth.clientSecret}`)}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        scope: "signicat-api",
+      }).toString(),
+    });
+    payload = await readJsonResponse(response);
+  } finally {
+    releaseSlot();
+  }
 
   if (!response.ok) {
     throw new Error(
@@ -397,12 +463,19 @@ async function signicatFetch(endpoint, options = {}) {
     Authorization: `Bearer ${accessToken}`,
     ...options.headers,
   };
-  const response = await fetch(url, {
-    method: options.method || "GET",
-    headers,
-    body: options.body,
-  });
-  const payload = await readJsonResponse(response);
+  const releaseSlot = await waitForStaticRequestSlot();
+  let response;
+  let payload;
+  try {
+    response = await fetch(url, {
+      method: options.method || "GET",
+      headers,
+      body: options.body,
+    });
+    payload = await readJsonResponse(response);
+  } finally {
+    releaseSlot();
+  }
 
   if (!response.ok) {
     throw new Error(

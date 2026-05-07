@@ -1,5 +1,10 @@
 const FINAL_STATUSES = new Set(["accepted", "rejected", "inconclusive", "canceled", "failed"]);
 const STORAGE_KEY = "videoidSandboxSession";
+const RATE_STORAGE_KEY = "videoidSandboxRateWindow";
+const STATIC_RATE_WINDOW_MS = 60_000;
+const STATIC_RATE_WINDOW_LIMIT = 30;
+const CALLBACK_POLL_INTERVAL_MS = 5_000;
+const CALLBACK_MAX_POLL_MS = 120_000;
 const params = Object.fromEntries(new URLSearchParams(window.location.search).entries());
 const callbackData = document.getElementById("callbackData");
 const processData = document.getElementById("processData");
@@ -9,6 +14,42 @@ const pollStatus = document.getElementById("pollStatus");
 callbackData.textContent = JSON.stringify(params, null, 2);
 processData.textContent = "Waiting for process lookup...";
 matchData.textContent = "Waiting for a final process result...";
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function loadRateWindow() {
+  try {
+    const windowState = JSON.parse(sessionStorage.getItem(RATE_STORAGE_KEY) || "{}");
+    if (
+      !windowState.startedAt ||
+      !Number.isFinite(windowState.count) ||
+      Date.now() - windowState.startedAt > STATIC_RATE_WINDOW_MS
+    ) {
+      return { startedAt: Date.now(), count: 0 };
+    }
+    return windowState;
+  } catch (_error) {
+    return { startedAt: Date.now(), count: 0 };
+  }
+}
+
+function saveRateWindow(windowState) {
+  sessionStorage.setItem(RATE_STORAGE_KEY, JSON.stringify(windowState));
+}
+
+function trackStaticRequestLimit() {
+  const windowState = loadRateWindow();
+  if (windowState.count >= STATIC_RATE_WINDOW_LIMIT) {
+    const retryAfterMs = Math.max(0, STATIC_RATE_WINDOW_MS - (Date.now() - windowState.startedAt));
+    throw new Error(
+      `Static mode request limit reached. Wait ${Math.ceil(retryAfterMs / 1000)} seconds before calling Signicat again.`
+    );
+  }
+  windowState.count += 1;
+  saveRateWindow(windowState);
+}
 
 async function fetchJson(path) {
   const staticResult = await fetchStaticJson(path);
@@ -56,6 +97,7 @@ async function getStaticAccessToken(settings) {
     throw new Error("No browser-session client credentials are configured.");
   }
 
+  trackStaticRequestLimit();
   const response = await fetch(`${getApiBaseUrl(settings)}/auth/open/connect/token`, {
     method: "POST",
     headers: {
@@ -103,6 +145,7 @@ async function fetchStaticJson(path) {
   const accessToken = await getStaticAccessToken(settings);
   const dossierId = decodeURIComponent(processMatch[1]);
   const processId = decodeURIComponent(processMatch[2]);
+  trackStaticRequestLimit();
   const response = await fetch(
     `${getApiBaseUrl(settings)}/assure/dossiers/${encodeURIComponent(dossierId)}/processes/${encodeURIComponent(processId)}`,
     {
@@ -218,6 +261,12 @@ async function pollProcessResult() {
 
   while (true) {
     try {
+      if (document.hidden) {
+        pollStatus.textContent = "Polling is paused while this tab is in the background.";
+        await sleep(CALLBACK_POLL_INTERVAL_MS);
+        continue;
+      }
+
       pollStatus.textContent = "Checking Signicat for the latest process status...";
       const result = await fetchJson(
         `/api/dossiers/${encodeURIComponent(dossierId)}/processes/${encodeURIComponent(processId)}`
@@ -235,13 +284,13 @@ async function pollProcessResult() {
         return;
       }
 
-      if (Date.now() - startedAt > 120000) {
+      if (Date.now() - startedAt > CALLBACK_MAX_POLL_MS) {
         pollStatus.textContent =
           "Still waiting after 2 minutes. Reload this page to keep checking for the final result.";
         return;
       }
 
-      pollStatus.textContent = `Current process status: ${processResult.status || "unknown"}. Checking again in 3 seconds...`;
+      pollStatus.textContent = `Current process status: ${processResult.status || "unknown"}. Checking again in 5 seconds...`;
     } catch (error) {
       processData.textContent = JSON.stringify({ error: error.message }, null, 2);
       pollStatus.textContent = "Process lookup failed. Reload this page to try again.";
@@ -257,7 +306,7 @@ async function pollProcessResult() {
       return;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await sleep(CALLBACK_POLL_INTERVAL_MS);
   }
 }
 
