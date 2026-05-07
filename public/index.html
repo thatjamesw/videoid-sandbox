@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VideoID Sandbox Lab</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="masthead">
+        <div class="brand-lockup">
+          <p class="eyebrow">Signicat Sandbox</p>
+          <h1>VideoID Sandbox Lab</h1>
+          <p class="lede">
+            Internal workspace for testing supported documents, capture configuration, flow launch,
+            and request mapping in one place.
+          </p>
+        </div>
+        <nav class="workflow-nav" aria-label="Workflow">
+          <a href="#supported-documents">Supported documents</a>
+          <a href="#capture-configuration">Capture configuration</a>
+          <a href="#capture-flow">Capture flow</a>
+          <a href="#signicat-mapping">Signicat mapping</a>
+        </nav>
+      </header>
+
+      <section class="status-strip" aria-label="Environment">
+        <div class="status-item">
+          <span class="label">API base</span>
+          <strong id="apiBaseUrl">...</strong>
+        </div>
+        <div class="status-item">
+          <span class="label">Token</span>
+          <strong id="tokenState">...</strong>
+        </div>
+        <div class="status-item">
+          <span class="label">Redirect URL</span>
+          <strong id="redirectUrl">...</strong>
+        </div>
+      </section>
+
+      <section class="workspace-section">
+        <div class="section-rail">
+          <p class="section-index">00</p>
+          <h2>Connection</h2>
+          <p class="section-note">
+            Override the Signicat API base URL and client credentials in the browser without restarting the app.
+          </p>
+        </div>
+
+        <div class="section-body">
+          <form id="authForm" class="stack">
+            <div class="form-grid">
+              <label class="field">
+                <span>API base URL</span>
+                <input id="apiBaseUrlInput" placeholder="https://api.signicat.com" />
+              </label>
+              <label class="field">
+                <span>Auth mode</span>
+                <select id="authModeInput">
+                  <option value="client_credentials">Client credentials</option>
+                  <option value="token">Bearer API token</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Client ID</span>
+                <input id="clientIdInput" placeholder="sandbox-..." />
+              </label>
+              <label class="field">
+                <span>Client secret / Signicat API token</span>
+                <input
+                  id="clientSecretInput"
+                  type="password"
+                  placeholder="Paste the Signicat secret/token used to obtain an access token"
+                />
+              </label>
+              <div class="field field-note">
+                <span>How this is used</span>
+                <p class="muted">
+                  Client credentials are exchanged for a bearer token. Bearer API token mode sends
+                  the pasted token directly in the Authorization header.
+                </p>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>ID Number for finalResult matching</span>
+                <input id="expectedIdNumberInput" placeholder="Expected NIN / document ID number" />
+              </label>
+              <div class="field field-note">
+                <span>How matching is checked</span>
+                <p class="muted">
+                  The callback compares this value against `finalResult.personalIdentificationNumber`
+                  first, then `finalResult.documentNumber`.
+                </p>
+              </div>
+            </div>
+
+            <div class="inline-actions">
+              <button type="submit" class="primary">Apply connection settings</button>
+              <button type="button" id="resetAuthButton" class="secondary">Reset to env defaults</button>
+            </div>
+          </form>
+
+          <pre id="authResult" class="result"></pre>
+        </div>
+      </section>
+
+      <section id="supported-documents" class="workspace-section">
+        <div class="section-rail">
+          <p class="section-index">01</p>
+          <h2>Supported documents</h2>
+          <p class="section-note">
+            Load provider coverage first so the numeric `id` values you use in
+            `signicatvideoidConfig.allowedIdTypes` match what the sandbox actually returns.
+          </p>
+        </div>
+
+        <div class="section-body">
+          <form id="documentTypesForm" class="control-row">
+            <label class="field compact-field">
+              <span>Provider</span>
+              <select id="providerSelect">
+                <option value="signicatvideoid">signicatvideoid</option>
+                <option value="signicatpictureid">signicatpictureid</option>
+                <option value="onfido">onfido</option>
+              </select>
+            </label>
+            <button type="submit" class="primary">Load document types</button>
+          </form>
+
+          <div id="documentTypeSummary" class="summary-line muted"></div>
+
+          <div class="two-column">
+            <div class="content-group">
+              <div class="group-heading">
+                <h3>Available document types</h3>
+                <p class="muted">Select the IDs you want to carry into the capture configuration.</p>
+              </div>
+              <div class="document-tools">
+                <label class="field compact-field">
+                  <span>Sort by</span>
+                  <select id="documentTypeSort">
+                    <option value="country">Country A-Z</option>
+                    <option value="type">Document type A-Z</option>
+                    <option value="id">Numeric ID</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Filter</span>
+                  <input id="documentTypeFilter" placeholder="Country, type, subtype, or ID" />
+                </label>
+              </div>
+              <div id="documentTypeList" class="document-list"></div>
+            </div>
+
+            <div class="content-group">
+              <div class="group-heading">
+                <h3>Coverage summary</h3>
+                <p class="muted">Use this when sharing support coverage internally or with Signicat.</p>
+              </div>
+              <div class="inline-actions">
+                <button type="button" id="exportCoverageButton" class="secondary">
+                  Copy coverage summary
+                </button>
+              </div>
+              <label class="field">
+                <span>Coverage summary for Signicat support</span>
+                <textarea id="coverageSummary" class="short-textarea" spellcheck="false"></textarea>
+              </label>
+          <div id="coverageGroups" class="coverage-groups"></div>
+            </div>
+          </div>
+
+          <div class="debug-panel">
+            <div class="group-heading">
+              <h3>Latest Signicat request</h3>
+              <p class="muted">Endpoint, method, and outbound body for the last document lookup.</p>
+            </div>
+            <div class="inline-actions">
+              <button type="button" class="secondary" data-copy-target="documentTypesDebug">Copy request details</button>
+            </div>
+            <pre id="documentTypesDebug" class="result result-console"></pre>
+          </div>
+
+          <pre id="documentTypesResult" class="result result-console"></pre>
+        </div>
+      </section>
+
+      <section id="capture-configuration" class="workspace-section">
+        <div class="section-rail">
+          <p class="section-index">02</p>
+          <h2>Capture configuration</h2>
+          <p class="section-note">
+            Edit the configuration with the generic document types, allowed numeric IDs, and raw
+            JSON visible together.
+          </p>
+        </div>
+
+        <div class="section-body">
+          <form id="configForm" class="stack">
+            <div class="form-grid">
+              <label class="field">
+                <span>Page title</span>
+                <input id="pageTitleInput" placeholder="Signicat Capture" />
+              </label>
+              <label class="field">
+                <span>Configuration ID</span>
+                <input id="configId" value="videoid-sandbox-demo" />
+              </label>
+            </div>
+
+            <div class="inline-actions">
+              <button type="button" id="loadConfigButton">Load config</button>
+              <button type="button" id="listConfigsButton" class="secondary">List configs</button>
+              <button type="button" id="loadTemplateButton" class="tertiary">Load starter template</button>
+            </div>
+
+            <div class="inline-actions">
+              <button type="button" id="presetStarterButton" class="tertiary">Starter preset</button>
+              <button type="button" id="presetFinlandButton" class="tertiary">Finland only</button>
+              <button type="button" id="presetNorwayButton" class="tertiary">Norway only</button>
+              <button type="button" id="presetPassportButton" class="tertiary">Passport only</button>
+              <button type="button" id="presetVisualProofButton" class="tertiary">Visual proof test</button>
+            </div>
+
+            <div class="field field-note">
+              <span>What these do</span>
+              <p class="muted">
+                `Load config` fetches the saved config for the ID above. `List configs` shows all saved configuration IDs.
+                `Load starter template` fills the form with a local sample so you can tweak it before saving.
+                The presets below quickly apply common test shapes, and if document types are loaded they will also try to fill matching VideoID allowed IDs.
+              </p>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Generic document types</span>
+                <input
+                  id="documentTypesInput"
+                  value="passport,identityCard,driversLicense"
+                  placeholder="passport,identityCard,driversLicense"
+                />
+              </label>
+              <label class="field">
+                <span>Favicon URL or data URI</span>
+                <input id="faviconInput" placeholder="https://... or data:image/png;base64,..." />
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Document countries for selected document types (ISO3, comma-separated)</span>
+                <input id="documentCountriesInput" placeholder="NOR,SWE,FIN" />
+              </label>
+              <label class="field">
+                <span>Default document country (ISO3)</span>
+                <input id="defaultDocumentCountryInput" placeholder="NOR" />
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Languages (comma-separated)</span>
+                <input id="languagesInput" placeholder="en,nb,sv" />
+              </label>
+              <label class="field">
+                <span>Default language</span>
+                <input id="defaultLanguageInput" placeholder="en" />
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Show prerequisites screen</span>
+                <select id="showPrerequisitesScreenInput">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Show consent page</span>
+                <select id="showConsentPageInput">
+                  <option value="false">false</option>
+                  <option value="true">true</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Show country before document type</span>
+                <select id="showCountryBeforeDocumentTypeInput">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Show accessibility link</span>
+                <select id="showAccessibilityLinkInput">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Show document instructions screen</span>
+                <select id="showDocumentInstructionsScreenInput">
+                  <option value="false">false</option>
+                  <option value="true">true</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>VideoID SDK load timeout (seconds)</span>
+                <input id="sdkLoadTimeoutInput" type="number" min="1" step="1" placeholder="8" />
+              </label>
+            </div>
+
+            <details class="advanced-config">
+              <summary>Advanced capture customization</summary>
+
+              <div class="stack advanced-config-body">
+                <section class="advanced-group">
+                  <div class="group-heading">
+                    <h3>Branding</h3>
+                    <p class="muted">Visual customization options that are easy to validate quickly in the flow.</p>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Font name</span>
+                      <input id="fontNameInput" placeholder="Avenir Next" />
+                    </label>
+                    <label class="field">
+                      <span>Font URL</span>
+                      <input
+                        id="fontUrlInput"
+                        placeholder="https://fonts.googleapis.com/css?family=Raleway:400,500,600,700&display=swap"
+                      />
+                    </label>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Primary color</span>
+                      <input id="primaryColorInput" placeholder="#5AAFFF" />
+                    </label>
+                    <label class="field">
+                      <span>Font color</span>
+                      <input id="fontColorInput" placeholder="#000000" />
+                    </label>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Buttons color</span>
+                      <input id="buttonsColorInput" placeholder="#000000" />
+                    </label>
+                    <label class="field">
+                      <span>Buttons hover color</span>
+                      <input id="buttonsHoverColorInput" placeholder="#222222" />
+                    </label>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Buttons text color</span>
+                      <input id="buttonsTextColorInput" placeholder="#FFFFFF" />
+                    </label>
+                    <label class="field">
+                      <span>Spinner color</span>
+                      <input id="spinnerColorInput" placeholder="#5AAFFF" />
+                    </label>
+                  </div>
+
+                  <label class="field">
+                    <span>Custom CSS</span>
+                    <textarea
+                      id="customCssInput"
+                      class="short-textarea"
+                      spellcheck="false"
+                      placeholder="body { --brand-color: #004f2d; }"
+                    ></textarea>
+                  </label>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Use Signicat theming</span>
+                      <select id="useSignicatThemingInput">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Show modal before redirect</span>
+                      <select id="showModalBeforeRedirectInput">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+
+                <section class="advanced-group">
+                  <div class="group-heading">
+                    <h3>Upload Flow</h3>
+                    <p class="muted">Controls for document capture, upload behavior, and validation screens.</p>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Default country (ISO3)</span>
+                      <input id="defaultCountryInput" placeholder="NOR" />
+                    </label>
+                    <label class="field">
+                      <span>Use native camera on mobile</span>
+                      <select id="useNativeCameraInput">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Allow file upload (comma-separated)</span>
+                      <input id="allowFileUploadInput" placeholder="mobile,desktop" />
+                    </label>
+                    <label class="field">
+                      <span>Allow take photo (comma-separated)</span>
+                      <input id="allowTakePhotoInput" placeholder="mobile,desktop" />
+                    </label>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Allow zoom on preview (comma-separated)</span>
+                      <input id="allowZoomOnPreviewInput" placeholder="uploadPhoto,takePhoto" />
+                    </label>
+                    <label class="field">
+                      <span>Detect glare (comma-separated)</span>
+                      <input id="detectGlareInput" placeholder="uploadPhoto,takePhoto" />
+                    </label>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Enable orientation confirmation</span>
+                      <select id="enableOrientationConfirmationInput">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Auto capture</span>
+                      <select id="autoCaptureInput">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Custom redaction error</span>
+                      <select id="customRedactionErrorInput">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Take selfie</span>
+                      <select id="takeSelfieInput">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Max retries</span>
+                      <input id="maxRetriesInput" type="number" min="0" step="1" placeholder="3" />
+                    </label>
+                  </div>
+                </section>
+
+                <section class="advanced-group">
+                  <div class="group-heading">
+                    <h3>Mobile handover</h3>
+                    <p class="muted">Settings for moving the flow from desktop to mobile capture.</p>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Enable mobile handover</span>
+                      <select id="enableMobileHandoverInput">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Force mobile handover</span>
+                      <select id="forceMobileHandoverInput">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>SMS default country (ISO3)</span>
+                      <input id="smsDefaultCountryInput" placeholder="NOR" />
+                    </label>
+                    <label class="field">
+                      <span>Mobile handover timeout (minutes)</span>
+                      <input id="mobileHandoverTimeoutInput" type="number" min="0" step="1" placeholder="3" />
+                    </label>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Mobile handover modes (comma-separated)</span>
+                      <input id="mobileHandoverModesInput" placeholder="sms,qrCode" />
+                    </label>
+                  </div>
+                </section>
+
+                <section class="advanced-group">
+                  <div class="group-heading">
+                    <h3>VideoID native</h3>
+                    <p class="muted">Native Signicat VideoID-specific tuning and helper notes.</p>
+                  </div>
+
+                  <div class="field field-note">
+                    <span>Native camera translations</span>
+                    <p class="muted">
+                      Add `useNativeCameraButton`, `frontImage.useNativeCameraText`, `backImage.useNativeCameraText`,
+                      `selfie.useNativeCameraText`, or document-specific variants inside the `Translations` JSON below.
+                    </p>
+                  </div>
+                </section>
+              </div>
+            </details>
+
+            <label class="field">
+              <span>VideoID allowed ID type IDs</span>
+              <input id="allowedIdTypesInput" placeholder="61,62,188" />
+            </label>
+
+            <label class="field">
+              <span>Prerequisites screen items (JSON array)</span>
+              <textarea
+                id="prerequisitesScreenItemsInput"
+                class="short-textarea"
+                spellcheck="false"
+                placeholder='[{"title":"Identity document","description":"Your original valid document"}]'
+              ></textarea>
+            </label>
+
+            <label class="field">
+              <span>Document instructions screen items (JSON array)</span>
+              <textarea
+                id="documentInstructionsScreenItemsInput"
+                class="short-textarea"
+                spellcheck="false"
+                placeholder='[{"title":"Good lighting","description":"Avoid glare and shadows"}]'
+              ></textarea>
+            </label>
+
+            <label class="field">
+              <span>Translations (JSON object)</span>
+              <textarea
+                id="translationsInput"
+                class="short-textarea"
+                spellcheck="false"
+                placeholder='{"en":{"mainHeaderGenericTitle":"Identity verification"}}'
+              ></textarea>
+            </label>
+
+            <label class="field">
+              <span>Raw capture configuration JSON preview</span>
+              <textarea id="configJson" class="result-console" spellcheck="false"></textarea>
+            </label>
+
+            <div class="inline-actions">
+              <button type="button" id="previewConfigButton">Preview JSON</button>
+              <button type="submit" class="primary">Save configuration</button>
+            </div>
+          </form>
+
+          <div class="field field-note">
+            <span>Action output</span>
+            <p class="muted">
+              This console shows API responses and action outcomes like load, list, save, or validation errors. The
+              Signicat payload preview stays in the JSON preview box above.
+            </p>
+          </div>
+
+          <div class="debug-panel">
+            <div class="group-heading">
+              <h3>Latest Signicat request</h3>
+              <p class="muted">Inspect the configuration endpoint and exact JSON body sent to Signicat.</p>
+            </div>
+            <div class="inline-actions">
+              <button type="button" class="secondary" data-copy-target="configDebug">Copy request details</button>
+            </div>
+            <pre id="configDebug" class="result result-console"></pre>
+          </div>
+
+          <pre id="configResult" class="result"></pre>
+        </div>
+      </section>
+
+      <section id="capture-flow" class="workspace-section">
+        <div class="section-rail">
+          <p class="section-index">03</p>
+          <h2>Capture flow</h2>
+          <p class="section-note">
+            Create a dossier, keep the saved `uiProfile`, and launch the flow with the provider,
+            SDK, process type, and redirect URL you want to test.
+          </p>
+        </div>
+
+        <div class="section-body">
+          <form id="captureForm" class="stack">
+            <div class="inline-actions">
+              <button type="button" id="createDossierButton" class="primary">Create dossier</button>
+              <button type="button" id="listDossiersButton">List dossiers</button>
+              <button type="button" id="deleteAllDossiersButton" class="secondary">Delete all dossiers</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Dossier ID</span>
+                <input id="dossierId" placeholder="Paste or create a dossier ID" />
+              </label>
+              <label class="field">
+                <span>Provider</span>
+                <select id="captureProvider">
+                  <option value="signicatvideoid">signicatvideoid</option>
+                  <option value="signicatpictureid">signicatpictureid</option>
+                  <option value="onfido">onfido</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-grid form-grid-narrow">
+              <label class="field">
+                <span>Process type</span>
+                <input id="processType" value="substantialFullyAuto" />
+              </label>
+              <label class="field">
+                <span>SDK</span>
+                <select id="sdk">
+                  <option value="native">native</option>
+                  <option value="capture">capture</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>UI profile / capture configuration ID</span>
+                <input id="uiProfile" value="videoid-sandbox-demo" />
+              </label>
+              <label class="field">
+                <span>Redirect URL</span>
+                <input id="captureRedirectUrl" />
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Current process ID</span>
+                <input id="captureProcessId" placeholder="Filled after start or paste from callback" />
+              </label>
+              <div class="field field-note">
+                <span>Cleanup options</span>
+                <p class="muted">
+                  Delete the process first if you want to clean up a single verification run. Delete the dossier when
+                  you are finished with the whole test identity.
+                </p>
+              </div>
+            </div>
+
+            <div class="inline-actions">
+              <button type="submit" class="primary">Start capture flow</button>
+              <button type="button" id="deleteProcessButton" class="tertiary">Delete current process</button>
+              <button type="button" id="deleteDossierButton" class="secondary">Delete dossier</button>
+            </div>
+          </form>
+
+          <div class="debug-panel">
+            <div class="group-heading">
+              <h3>Latest Signicat request</h3>
+              <p class="muted">Use this to verify the capture endpoint and launch payload before following the flow.</p>
+            </div>
+            <div class="inline-actions">
+              <button type="button" class="secondary" data-copy-target="captureDebug">Copy request details</button>
+            </div>
+            <pre id="captureDebug" class="result result-console"></pre>
+          </div>
+
+          <pre id="captureResult" class="result"></pre>
+        </div>
+      </section>
+
+      <section id="signicat-mapping" class="workspace-section workspace-section-last">
+        <div class="section-rail">
+          <p class="section-index">04</p>
+          <h2>Signicat mapping</h2>
+          <p class="section-note">Quick reference for the three requests this tool orchestrates.</p>
+        </div>
+
+        <div class="section-body">
+          <div class="mapping-list">
+            <div class="mapping-item">
+              <h3>Document support</h3>
+              <p>`GET /assure/{provider}/document-types` fetches the numeric IDs you can allow.</p>
+            </div>
+            <div class="mapping-item">
+              <h3>Configuration</h3>
+              <p>`PUT /assure/capture/configurations/{configurationId}` updates the capture configuration.</p>
+            </div>
+            <div class="mapping-item">
+              <h3>Capture launch</h3>
+              <p>`POST /assure/dossiers/{dossierId}/capture` starts the flow and can include `captureParameters.uiProfile`.</p>
+            </div>
+          </div>
+          <p class="mapping-note muted">
+            On GitHub Pages, credentials are stored only in this browser session and calls are made
+            directly to Signicat. If a direct request fails before reaching Signicat, check that CORS
+            allows this page origin.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
