@@ -100,4 +100,4 @@ in memory for the current server run and reset when you restart the app or click
 
 ## Extra docs
 
-- [Signicat Capture And Assure Flow Explainer](/Users/jameswright/Documents/code/videoid/CAPTURE_FLOW_EXPLAINER.md)
+- [Signicat Capture And Assure Flow Explainer](CAPTURE_FLOW_EXPLAINER.md)

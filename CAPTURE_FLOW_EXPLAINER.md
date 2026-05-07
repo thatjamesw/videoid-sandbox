@@ -197,8 +197,8 @@ The repository can still be used as a concrete example of the API sequence above
 
 Relevant references:
 
-- save decision logic: [public/app.js](/Users/jameswright/Documents/code/videoid/public/app.js:877)
-- capture start form submit: [public/app.js](/Users/jameswright/Documents/code/videoid/public/app.js:949)
-- capture launch payload construction: [server.js](/Users/jameswright/Documents/code/videoid/server.js:417)
-- capture configuration proxy endpoints: [server.js](/Users/jameswright/Documents/code/videoid/server.js:499)
-- request debug formatting in UI: [public/app.js](/Users/jameswright/Documents/code/videoid/public/app.js:159)
+- save decision logic: [public/app.js](public/app.js)
+- capture start form submit: [public/app.js](public/app.js)
+- capture launch payload construction: [server.js](server.js)
+- capture configuration proxy endpoints: [server.js](server.js)
+- request debug formatting in UI: [public/js/dom.js](public/js/dom.js)
