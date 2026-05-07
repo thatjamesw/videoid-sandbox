@@ -132,6 +132,32 @@ function byId(id) {
   return document.getElementById(id);
 }
 
+function createElement(tagName, attributes = {}, children = []) {
+  const element = document.createElement(tagName);
+
+  for (const [key, value] of Object.entries(attributes)) {
+    if (value === false || value === null || value === undefined) {
+      continue;
+    }
+
+    if (key === "className") {
+      element.className = value;
+    } else if (key === "textContent") {
+      element.textContent = value;
+    } else if (key === "checked") {
+      element.checked = Boolean(value);
+    } else {
+      element.setAttribute(key, String(value));
+    }
+  }
+
+  for (const child of children) {
+    element.append(child);
+  }
+
+  return element;
+}
+
 function setResult(id, value) {
   byId(id).textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
 }
@@ -742,9 +768,9 @@ function renderDocumentTypes() {
   const selectedIds = new Set(selectedAllowedIdTypes());
 
   if (!state.documentTypes.length) {
-    container.innerHTML = "";
+    container.replaceChildren();
     summary.textContent = "No document types loaded yet.";
-    coverageGroups.innerHTML = "";
+    coverageGroups.replaceChildren();
     byId("coverageSummary").value = "";
     setDocumentTypesResult("No document types loaded yet.");
     return;
@@ -756,19 +782,29 @@ function renderDocumentTypes() {
       ? `${state.documentTypes.length} document types returned from Signicat.`
       : `${visibleDocumentTypes.length} of ${state.documentTypes.length} document types shown.`;
 
-  container.innerHTML = visibleDocumentTypes
-    .map((item) => {
-      const label = documentTypeDisplayLabel(item);
-      const checked = selectedIds.has(Number(item.id)) ? " checked" : "";
-      return `
-        <label class="doc-item">
-          <input type="checkbox" data-doc-checkbox value="${item.id}"${checked} />
-          <span>${label}</span>
-          <code>#${item.id}</code>
-        </label>
-      `;
-    })
-    .join("") || `<p class="muted empty-state">No document types match this filter.</p>`;
+  if (!visibleDocumentTypes.length) {
+    container.replaceChildren(
+      createElement("p", {
+        className: "muted empty-state",
+        textContent: "No document types match this filter.",
+      })
+    );
+  } else {
+    container.replaceChildren(
+      ...visibleDocumentTypes.map((item) =>
+        createElement("label", { className: "doc-item" }, [
+          createElement("input", {
+            type: "checkbox",
+            "data-doc-checkbox": "",
+            value: item.id,
+            checked: selectedIds.has(Number(item.id)),
+          }),
+          createElement("span", { textContent: documentTypeDisplayLabel(item) }),
+          createElement("code", { textContent: `#${item.id}` }),
+        ])
+      )
+    );
+  }
 
   renderCoverageGroups();
 }
@@ -841,8 +877,8 @@ function renderCoverageGroups() {
   const groups = buildCoverageGroups();
   const container = byId("coverageGroups");
 
-  container.innerHTML = groups
-    .map((group) => {
+  container.replaceChildren(
+    ...groups.map((group) => {
       const typeParts = [
         group.passport.length ? `Passports: ${group.passport.length}` : null,
         group.identityCard.length ? `Identity cards: ${group.identityCard.length}` : null,
@@ -851,14 +887,12 @@ function renderCoverageGroups() {
         .filter(Boolean)
         .join(" | ");
 
-      return `
-        <div class="coverage-group">
-          <strong>${group.countryName} (${group.countryCode})</strong>
-          <span>${typeParts}</span>
-        </div>
-      `;
+      return createElement("div", { className: "coverage-group" }, [
+        createElement("strong", { textContent: `${group.countryName} (${group.countryCode})` }),
+        createElement("span", { textContent: typeParts }),
+      ]);
     })
-    .join("");
+  );
 
   byId("coverageSummary").value = buildCoverageSummary(groups);
 }
