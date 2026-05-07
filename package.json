@@ -2,9 +2,9 @@
   "name": "videoid-sandbox-lab",
   "version": "0.1.0",
   "private": true,
-  "description": "Tiny local app for experimenting with Signicat VideoID capture configurations",
+  "description": "Static Signicat VideoID sandbox with an optional local API proxy",
   "scripts": {
-    "start": "node server.js",
-    "check": "node --check server.js"
+    "start": "node dev/server.js",
+    "check": "node --check dev/server.js && node --check public/app.js && node --check public/callback.js && node --check public/js/api-client.js && node --check public/js/dom.js && node --check public/js/presets.js && node --check public/js/state.js"
   }
 }

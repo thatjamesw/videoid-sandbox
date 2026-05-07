@@ -199,6 +199,6 @@ Relevant references:
 
 - save decision logic: [public/app.js](public/app.js)
 - capture start form submit: [public/app.js](public/app.js)
-- capture launch payload construction: [server.js](server.js)
-- capture configuration proxy endpoints: [server.js](server.js)
+- capture launch payload construction: [public/js/api-client.js](public/js/api-client.js) and [dev/server.js](dev/server.js)
+- capture configuration proxy endpoints: [dev/server.js](dev/server.js)
 - request debug formatting in UI: [public/js/dom.js](public/js/dom.js)

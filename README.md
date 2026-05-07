@@ -1,6 +1,7 @@
 # VideoID Sandbox Lab
 
-Tiny local app for testing Signicat VideoID and Capture configuration from your own machine.
+Static Signicat VideoID sandbox for testing document support, capture configuration, and flow launch
+with user-provided credentials.
 
 It lets you:
 
@@ -10,7 +11,18 @@ It lets you:
 - create a dossier
 - start a capture flow and pass a `uiProfile` to it
 - compare a configured ID Number against the process `finalResult` on callback
-- override the Signicat API base URL and client credentials in the UI for the current app session
+- override the Signicat API base URL and client credentials in the UI for the current browser session
+
+## Project layout
+
+```text
+public/   Static app served by GitHub Pages and by the local dev server
+dev/      Optional local Node server that serves public/ and proxies /api/* requests
+```
+
+GitHub Pages and local development use the same frontend files in `public/`. The local server only
+adds a same-origin `/api/*` proxy for accounts or browsers where direct Signicat calls are not
+available.
 
 ## GitHub Pages / static hosting
 
@@ -53,9 +65,9 @@ Sources:
 - [Capture service docs](https://developer.signicat.com/docs/id-document-and-biometric-verification/services/capture/)
 - [VideoID integration guide](https://developer.signicat.com/docs/id-document-and-biometric-verification/provider-specific-integrations/signicat-videoid/integration-steps/)
 
-## Run it
+## Run Locally
 
-1. Copy `.env.example` to `.env` in your shell environment, or export the variables directly:
+1. Copy `dev/.env.example` to `dev/.env`, or export the variables directly:
 
 ```bash
 export SIGNICAT_CLIENT_ID="your-sandbox-client-id"
@@ -93,7 +105,8 @@ in memory for the current server run and reset when you restart the app or click
 - For VideoID, use `sdk=native`.
 - The app now exchanges `SIGNICAT_CLIENT_ID` and `SIGNICAT_CLIENT_SECRET` for an OAuth bearer token automatically.
 - In some Signicat setups, the value shown to you as an API token may actually be the secret you should paste into the `Client secret` field in this app.
-- UI-entered credentials are not written to disk; they only live in memory while the local server is running.
+- UI-entered credentials are not written to disk; in local proxy mode they only live in memory while
+  the local server is running.
 - The callback match checks `finalResult.personalIdentificationNumber` first, then `finalResult.documentNumber`.
 - The app does not store secrets or config locally beyond your environment variables.
 - If your Signicat account requires a specific domain setup for redirect or request domain, add that in the form before starting the flow.

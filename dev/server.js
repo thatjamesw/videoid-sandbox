@@ -5,6 +5,7 @@ const { URL } = require("url");
 
 loadDotEnv();
 
+const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "127.0.0.1";
 const SIGNICAT_API_BASE_URL = (
@@ -40,35 +41,41 @@ function createRuntimeAuthState() {
 }
 
 function loadDotEnv() {
-  const envPath = path.join(__dirname, ".env");
-  if (!fs.existsSync(envPath)) {
-    return;
-  }
+  const envPaths = [
+    path.join(__dirname, ".env"),
+    path.join(__dirname, "..", ".env"),
+  ];
 
-  const raw = fs.readFileSync(envPath, "utf8");
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
+  for (const envPath of envPaths) {
+    if (!fs.existsSync(envPath)) {
       continue;
     }
 
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex === -1) {
-      continue;
-    }
+    const raw = fs.readFileSync(envPath, "utf8");
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) {
+        continue;
+      }
 
-    const key = trimmed.slice(0, separatorIndex).trim();
-    let value = trimmed.slice(separatorIndex + 1).trim();
+      const separatorIndex = trimmed.indexOf("=");
+      if (separatorIndex === -1) {
+        continue;
+      }
 
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
+      const key = trimmed.slice(0, separatorIndex).trim();
+      let value = trimmed.slice(separatorIndex + 1).trim();
 
-    if (!(key in process.env)) {
-      process.env[key] = value;
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+
+      if (!(key in process.env)) {
+        process.env[key] = value;
+      }
     }
   }
 }
@@ -276,9 +283,9 @@ function buildRedirectUrl() {
 
 function serveStaticFile(res, pathname) {
   const safePath = pathname === "/" ? "/index.html" : pathname;
-  const filePath = path.join(__dirname, "public", safePath);
+  const filePath = path.join(PUBLIC_DIR, safePath);
 
-  if (!filePath.startsWith(path.join(__dirname, "public"))) {
+  if (!filePath.startsWith(PUBLIC_DIR)) {
     sendText(res, 403, "Forbidden");
     return;
   }
