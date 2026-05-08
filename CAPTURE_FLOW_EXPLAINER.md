@@ -2,6 +2,10 @@
 
 This document describes the end-to-end flow from a Signicat API perspective.
 
+This is an independent community note, not official Signicat documentation and not endorsed by
+Signicat. Use the public [Signicat developer documentation](https://developer.signicat.com/apis/id-document-and-biometric-verification/)
+as the source of truth.
+
 It is intended as a handoff note for discussing:
 
 - how a capture configuration is created or updated
@@ -116,11 +120,23 @@ sequenceDiagram
 
 ### Create dossier
 
-Typical request:
+Minimal request:
 
 ```json
 {}
 ```
+
+The public API reference also shows an optional `externalReference`, which is useful when you want to
+tie the dossier back to your own customer/session identifier:
+
+```json
+{
+  "externalReference": "someReferenceExample"
+}
+```
+
+This sandbox currently sends the minimal `{}` body when you click `Create dossier`, so Signicat
+generates a dossier without an external customer reference.
 
 Endpoint:
 

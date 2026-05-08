@@ -1,116 +1,119 @@
 # VideoID Sandbox Lab
 
-Static Signicat VideoID sandbox for testing document support, capture configuration, and flow launch
-with user-provided credentials.
+A small browser tool for trying Signicat VideoID and Capture flows with your own sandbox
+credentials.
 
-It lets you:
+Use it to load supported document types, build a Capture configuration, create a dossier, launch a
+VideoID flow, and inspect the exact Signicat API requests made along the way. It is meant for
+testing and integration discovery, not production traffic.
 
-- fetch supported document types for `signicatvideoid`, `signicatpictureid`, or `onfido`
-- map Signicat's numeric document IDs into `signicatvideoidConfig.allowedIdTypes`
-- create or update a capture configuration with `POST` or `PUT /assure/capture/configurations/{configurationId}`
-- create a dossier
-- start a capture flow and pass a `uiProfile` to it
-- compare a configured ID Number against the process `finalResult` on callback
-- override the Signicat API base URL and client credentials in the UI for the current browser session
+This is an independent community tool provided as-is for testing and educational purposes. It is not
+an official Signicat repository, and it is not endorsed, sponsored, or maintained by Signicat. Use
+Signicat's public developer documentation as the source of truth for API behavior.
 
-## Project layout
+## Open The App
 
-```text
-public/   Static app served by GitHub Pages and by the local dev server
-dev/      Optional local Node server that serves public/ and proxies /api/* requests
-```
+Hosted version:
 
-GitHub Pages and local development use the same frontend files in `public/`. The local server only
-adds a same-origin `/api/*` proxy for accounts or browsers where direct Signicat calls are not
-available.
+- [https://thatjamesw.github.io/videoid-sandbox/](https://thatjamesw.github.io/videoid-sandbox/)
 
-## GitHub Pages / static hosting
+You can use the hosted version directly if your Signicat tenant allows browser requests from that
+origin. If the browser blocks requests with CORS errors, run the app locally instead; the local
+server includes a small same-origin proxy.
 
-This app can run as a GitHub Pages-style static API explorer. In that mode, the HTML, CSS, and
-JavaScript are served statically and your Signicat credential is entered in the browser each session.
+## What You Need
 
-Security model:
+- A Signicat sandbox tenant
+- Either a client ID and client secret, or a bearer API token
+- Permission to create Capture configurations, dossiers, and capture processes
+- Hosted redirect URL: `https://thatjamesw.github.io/videoid-sandbox/callback.html`
+- Local redirect URL: `http://127.0.0.1:3000/callback`
 
-- no shared Signicat secret is committed to the repository or embedded in the static files
-- browser-entered credentials are stored in `sessionStorage` for the current browser session
-- credentials are still visible to the page JavaScript while the session is active, just like an
-  interactive API docs console
-- use sandbox, scoped, revocable credentials for this mode
-- direct browser calls require Signicat's API and token endpoints to allow CORS for the Pages origin
-- static mode limits this page to 2 concurrent Signicat requests and 30 Signicat requests per
-  browser session per minute to reduce accidental hammering
+## What It Does
 
-To publish the static version, configure GitHub Pages to serve the `public/` directory, then open
-`index.html`. The app automatically switches to static browser mode on `*.github.io`, and callback
-URLs use `callback.html` so project subpaths work correctly.
-
-If Signicat blocks direct browser requests with CORS, keep using the Node server locally or deploy a
-small backend proxy that keeps credentials server-side.
-
-These browser-side limits are not a DDoS protection boundary. A determined actor can bypass static
-site JavaScript and call Signicat directly with their own scripts or tools. Real abuse protection has
-to come from Signicat-side quotas/rate limits, scoped credentials, or a backend proxy you control.
-
-## Why this app is useful
-
-The Signicat docs show that:
-
-- provider-specific VideoID restrictions live in `signicatvideoidConfig.allowedIdTypes`
-- generic Capture restrictions live in `documentTypes`
-- Start capture flow can receive a `uiProfile` created through the Capture configuration endpoints
-
-Sources:
-
-- [Assure API reference](https://developer.signicat.com/apis/id-document-and-biometric-verification/)
-- [Capture service docs](https://developer.signicat.com/docs/id-document-and-biometric-verification/services/capture/)
-- [VideoID integration guide](https://developer.signicat.com/docs/id-document-and-biometric-verification/provider-specific-integrations/signicat-videoid/integration-steps/)
+- Loads supported documents for `signicatvideoid`, `signicatpictureid`, or `onfido`
+- Maps Signicat's numeric document IDs into `signicatvideoidConfig.allowedIdTypes`
+- Creates or updates a Capture configuration
+- Creates, lists, and deletes dossiers
+- Starts a Capture flow with a selected provider and optional `uiProfile`
+- Shows the exact method, URL, and JSON body for the latest Signicat request
+- Checks the callback result against an expected ID number, when you provide one
 
 ## Run Locally
 
-1. Copy `dev/.env.example` to `dev/.env`, or export the variables directly:
+1. Install dependencies:
 
 ```bash
-export SIGNICAT_CLIENT_ID="your-sandbox-client-id"
-export SIGNICAT_CLIENT_SECRET="your client secret"
-export SIGNICAT_API_BASE_URL="https://api.signicat.com"
-export PORT=3000
-export APP_BASE_URL="http://127.0.0.1:3000"
+npm install
 ```
 
-2. Start the app:
+2. Copy the example environment file:
+
+```bash
+cp dev/.env.example dev/.env
+```
+
+3. Edit `dev/.env` with your sandbox values:
+
+```bash
+SIGNICAT_CLIENT_ID="your-sandbox-client-id"
+SIGNICAT_CLIENT_SECRET="your-client-secret"
+SIGNICAT_API_BASE_URL="https://api.signicat.com"
+PORT=3000
+APP_BASE_URL="http://127.0.0.1:3000"
+```
+
+You can also leave credentials out of `dev/.env` and paste them into the Connection section in the
+UI. UI-entered credentials live only for the current app session.
+
+4. Start the app:
 
 ```bash
 npm start
 ```
 
-3. Open [http://localhost:3000](http://localhost:3000)
+5. Open [http://127.0.0.1:3000](http://127.0.0.1:3000)
 
-You can keep using environment variables as defaults, then change the client ID, client secret, and
-expected ID Number directly in the `Connection` section of the UI. Those UI overrides are stored only
-in memory for the current server run and reset when you restart the app or click `Clear session credentials`.
+## Suggested First Run
 
-## Suggested first test
+1. In Connection, confirm the API base URL and add your sandbox credentials.
+2. Click `Load document types` with `signicatvideoid` selected.
+3. Tick a few document IDs you want to allow.
+4. Click `Load starter template`.
+5. Save the Capture configuration as something like `videoid-sandbox-demo`.
+6. Click `Create dossier`.
+7. Add the ID number you expect to match, if you want callback matching.
+8. Start the Capture flow with `uiProfile=videoid-sandbox-demo`.
+9. Complete or cancel the flow, then inspect the callback page and request debug output.
 
-1. Click `Load document types` with `signicatvideoid`.
-2. Tick a few document IDs you want to allow.
-3. Click `Load starter template`.
-4. Save the configuration as something like `videoid-sandbox-demo`.
-5. Click `Create dossier`.
-6. Add the ID Number you expect to match in the `Connection` section.
-7. Start capture flow with `uiProfile=videoid-sandbox-demo`.
-8. Complete or cancel the flow and inspect the callback page at `/callback`.
+## Credential Notes
 
-## Notes
+The hosted version is a static page, so credentials you enter there are visible to that page's
+JavaScript while the browser session is active. They are stored in `sessionStorage` and are not
+committed to this repository.
 
-- For VideoID, use `sdk=native`.
-- The app now exchanges `SIGNICAT_CLIENT_ID` and `SIGNICAT_CLIENT_SECRET` for an OAuth bearer token automatically.
-- In some Signicat setups, the value shown to you as an API token may actually be the secret you should paste into the `Client secret` field in this app.
-- UI-entered credentials are not written to disk; in local proxy mode they only live in memory while
-  the local server is running.
-- The callback match checks `finalResult.personalIdentificationNumber` first, then `finalResult.documentNumber`.
-- The app does not store secrets or config locally beyond your environment variables.
-- If your Signicat account requires a specific domain setup for redirect or request domain, add that in the form before starting the flow.
+The local version keeps environment credentials server-side and proxies `/api/*` requests to
+Signicat. Credentials pasted into the local UI are stored only in memory while the local server is
+running.
 
-## Extra docs
+Use sandbox, scoped, revocable credentials. The browser-side request limits in this tool are only to
+reduce accidental repeated calls; real abuse protection must come from Signicat-side quotas, scoped
+credentials, or a backend you control.
+
+## Helpful Signicat Docs
+
+- [Assure API reference, including OpenAPI details](https://developer.signicat.com/apis/id-document-and-biometric-verification/)
+- [Assure OpenAPI JSON](https://api.signicat.com/assure/v3/api-docs)
+- [Capture service docs](https://developer.signicat.com/docs/id-document-and-biometric-verification/services/capture/)
+- [VideoID integration guide](https://developer.signicat.com/docs/id-document-and-biometric-verification/provider-specific-integrations/signicat-videoid/integration-steps/)
+
+## Repository Layout
+
+```text
+public/   Static frontend used by both the hosted app and the local server
+dev/      Local Node server and Signicat proxy
+```
+
+Extra notes:
 
 - [Signicat Capture And Assure Flow Explainer](CAPTURE_FLOW_EXPLAINER.md)
