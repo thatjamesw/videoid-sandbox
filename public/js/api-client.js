@@ -12,14 +12,21 @@ export async function api(path, options = {}) {
     return staticApi(path, options);
   }
 
-  const response = await fetch(path, {
-    method: options.method || "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      method: options.method || "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch (error) {
+    throw new Error(
+      `Could not reach the local API server for ${options.method || "GET"} ${path}. Start the app with npm start and open http://127.0.0.1:3000. Original error: ${error.message}`
+    );
+  }
 
   const payload = await response.json();
   if (!response.ok) {
@@ -89,6 +96,10 @@ function getStaticApiBaseUrl() {
 }
 
 function readJsonResponse(response) {
+  if (response.status === 204) {
+    return null;
+  }
+
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
     return response.json();
@@ -171,7 +182,8 @@ async function getStaticAccessToken() {
   let response;
   let payload;
   try {
-    response = await fetch(`${getStaticApiBaseUrl()}/auth/open/connect/token`, {
+    const tokenUrl = `${getStaticApiBaseUrl()}/auth/open/connect/token`;
+    response = await fetch(tokenUrl, {
       method: "POST",
       headers: {
         Authorization: `Basic ${btoa(`${auth.clientId}:${auth.clientSecret}`)}`,
@@ -184,6 +196,10 @@ async function getStaticAccessToken() {
       }).toString(),
     });
     payload = await readJsonResponse(response);
+  } catch (error) {
+    throw new Error(
+      `Browser request to Signicat token endpoint was blocked or failed. If you are using the hosted/static app, this is usually CORS; run the local server with npm start and open http://127.0.0.1:3000. Original error: ${error.message}`
+    );
   } finally {
     releaseSlot();
   }
@@ -244,6 +260,10 @@ async function signicatFetch(endpoint, options = {}) {
       body: options.body,
     });
     payload = await readJsonResponse(response);
+  } catch (error) {
+    throw new Error(
+      `Browser request to Signicat failed for ${options.method || "GET"} ${endpoint}. If you are using the hosted/static app, this is usually CORS; run the local server with npm start and open http://127.0.0.1:3000. Original error: ${error.message}`
+    );
   } finally {
     releaseSlot();
   }
@@ -446,21 +466,33 @@ async function staticApi(path, options = {}) {
   const configMatch = path.match(/^\/api\/capture-configurations\/([^/]+)$/);
   if (configMatch) {
     const configId = decodeURIComponent(configMatch[1]);
+    const endpoint = `/assure/capture/configurations/${encodeURIComponent(configId)}`;
     if (method === "GET") {
-      const result = await signicatFetch(
-        `/assure/capture/configurations/${encodeURIComponent(configId)}`
-      );
+      const result = await signicatFetch(endpoint);
       return { data: result.payload, signicatRequest: result.request };
     }
-    if (method === "PUT" || method === "POST") {
-      const result = await signicatFetch(
-        `/assure/capture/configurations/${encodeURIComponent(configId)}`,
-        {
-          method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(options.body || {}),
-        }
-      );
+
+    if (method === "PUT") {
+      const deleteResult = await signicatFetch(endpoint, { method: "DELETE" });
+      const createResult = await signicatFetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(options.body || {}),
+      });
+      return {
+        data: createResult.payload,
+        method: "DELETE+POST",
+        message: "Existing configuration overwritten from static browser mode.",
+        signicatRequests: [deleteResult.request, createResult.request],
+      };
+    }
+
+    if (method === "POST") {
+      const result = await signicatFetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(options.body || {}),
+      });
       return { data: result.payload, signicatRequest: result.request };
     }
   }

@@ -126,18 +126,25 @@ async function getAccessToken() {
     );
   }
 
-  const response = await fetch(`${getEffectiveApiBaseUrl()}/auth/open/connect/token`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basicAuthValue}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      scope: "signicat-api",
-    }).toString(),
-  });
+  let response;
+  try {
+    response = await fetch(`${getEffectiveApiBaseUrl()}/auth/open/connect/token`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basicAuthValue}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        scope: "signicat-api",
+      }).toString(),
+    });
+  } catch (error) {
+    const tokenError = new Error(`Could not reach Signicat token endpoint: ${error.message}`);
+    tokenError.status = 502;
+    throw tokenError;
+  }
 
   const contentType = response.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
@@ -225,11 +232,20 @@ async function signicatFetch(endpoint, options = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(url, {
-    method: options.method || "GET",
-    headers,
-    body: options.body,
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      method: options.method || "GET",
+      headers,
+      body: options.body,
+    });
+  } catch (error) {
+    const fetchError = new Error(
+      `Could not reach Signicat for ${options.method || "GET"} ${endpoint}: ${error.message}`
+    );
+    fetchError.status = 502;
+    throw fetchError;
+  }
 
   const contentType = response.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
