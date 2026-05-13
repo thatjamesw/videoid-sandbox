@@ -835,7 +835,11 @@ async function main() {
         body: payload,
       });
       setSignicatDebug("configDebug", result);
-      setResult("configResult", { method, result: unwrapApiData(result) });
+      setResult("configResult", {
+        method: result.method || method,
+        message: result.message,
+        result: unwrapApiData(result),
+      });
     } catch (error) {
       setSignicatDebug("configDebug", null);
       setResult("configResult", { error: error.message });

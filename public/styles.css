@@ -64,6 +64,7 @@ body {
 
 .brand-lockup,
 .workflow-nav,
+.disclaimer,
 .status-strip,
 .workspace-section {
   animation: fade-up 640ms var(--ease) both;
@@ -122,8 +123,9 @@ h3 {
   position: relative;
   display: grid;
   gap: 6px;
-  max-width: 44rem;
-  margin-top: 18px;
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: -18px;
   padding: 14px 16px 14px 18px;
   border: 1px solid rgba(0, 113, 227, 0.28);
   border-left: 5px solid var(--accent);
