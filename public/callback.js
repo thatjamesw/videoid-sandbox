@@ -19,6 +19,29 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isStaticHostingLikely() {
+  return window.location.protocol === "file:" || window.location.hostname.endsWith(".github.io");
+}
+
+function shouldUseStaticMode(settings) {
+  return Boolean(settings.staticMode) || isStaticHostingLikely();
+}
+
+async function readJsonResponse(response, context) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  const preview = text.trim().slice(0, 160);
+  throw new Error(
+    `${context} returned ${contentType || "an unknown content type"} instead of JSON${
+      preview ? `: ${preview}` : "."
+    }`
+  );
+}
+
 function loadRateWindow() {
   try {
     const windowState = JSON.parse(sessionStorage.getItem(RATE_STORAGE_KEY) || "{}");
@@ -62,7 +85,7 @@ async function fetchJson(path) {
       Accept: "application/json",
     },
   });
-  const payload = await response.json();
+  const payload = await readJsonResponse(response, path);
   if (!response.ok) {
     throw new Error(payload.error || "Request failed.");
   }
@@ -110,7 +133,7 @@ async function getStaticAccessToken(settings) {
       scope: "signicat-api",
     }).toString(),
   });
-  const payload = await response.json();
+  const payload = await readJsonResponse(response, "Signicat token request");
   if (!response.ok) {
     throw new Error(
       payload.error_description ||
@@ -127,7 +150,7 @@ async function getStaticAccessToken(settings) {
 
 async function fetchStaticJson(path) {
   const settings = loadSessionSettings();
-  if (!settings.staticMode) {
+  if (!shouldUseStaticMode(settings)) {
     return null;
   }
 
@@ -155,7 +178,7 @@ async function fetchStaticJson(path) {
       },
     }
   );
-  const payload = await response.json();
+  const payload = await readJsonResponse(response, "Signicat process lookup");
   if (!response.ok) {
     throw new Error(
       payload.error_description ||
