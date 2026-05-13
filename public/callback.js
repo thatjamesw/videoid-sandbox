@@ -1,5 +1,6 @@
 const FINAL_STATUSES = new Set(["accepted", "rejected", "inconclusive", "canceled", "failed"]);
 const STORAGE_KEY = "videoidSandboxSession";
+const SESSION_COOKIE_KEY = "videoidSandboxSessionCookie";
 const RATE_STORAGE_KEY = "videoidSandboxRateWindow";
 const STATIC_RATE_WINDOW_MS = 60_000;
 const STATIC_RATE_WINDOW_LIMIT = 30;
@@ -25,6 +26,13 @@ function isStaticHostingLikely() {
 
 function shouldUseStaticMode(settings) {
   return Boolean(settings.staticMode) || isStaticHostingLikely();
+}
+
+function hasStaticCredentials(settings) {
+  if (settings.authMode === "token") {
+    return Boolean(settings.apiToken);
+  }
+  return Boolean(settings.clientId && settings.clientSecret);
 }
 
 async function readJsonResponse(response, context) {
@@ -93,10 +101,31 @@ async function fetchJson(path) {
 }
 
 function loadSessionSettings() {
+  const cookieSettings = readSessionCookieSettings();
+  if (cookieSettings) {
+    return cookieSettings;
+  }
+
   try {
     return JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "{}");
   } catch (_error) {
     return {};
+  }
+}
+
+function readSessionCookieSettings() {
+  const cookie = document.cookie
+    .split("; ")
+    .find((entry) => entry.startsWith(`${SESSION_COOKIE_KEY}=`));
+
+  if (!cookie) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(decodeURIComponent(cookie.slice(SESSION_COOKIE_KEY.length + 1)));
+  } catch (_error) {
+    return null;
   }
 }
 
@@ -107,7 +136,9 @@ function getApiBaseUrl(settings) {
 async function getStaticAccessToken(settings) {
   if (settings.authMode === "token") {
     if (!settings.apiToken) {
-      throw new Error("No browser-session API token is configured.");
+      throw new Error(
+        "This callback page is using static browser mode, but no API token was found in this browser. Save Connection settings on the hosted page before starting the flow, then return to this callback URL."
+      );
     }
     return settings.apiToken;
   }
@@ -117,7 +148,9 @@ async function getStaticAccessToken(settings) {
   }
 
   if (!settings.clientId || !settings.clientSecret) {
-    throw new Error("No browser-session client credentials are configured.");
+    throw new Error(
+      "This callback page is using static browser mode, but no client ID/client secret was found in this browser. Save Connection settings on the hosted page before starting the flow, then return to this callback URL."
+    );
   }
 
   trackStaticRequestLimit();
@@ -163,6 +196,12 @@ async function fetchStaticJson(path) {
   const processMatch = path.match(/^\/api\/dossiers\/([^/]+)\/processes\/([^/]+)$/);
   if (!processMatch) {
     return null;
+  }
+
+  if (!hasStaticCredentials(settings)) {
+    throw new Error(
+      "This callback cannot fetch the live process result because this browser does not have Signicat credentials for the hosted page. Save Connection settings on the hosted page, then start the flow again."
+    );
   }
 
   const accessToken = await getStaticAccessToken(settings);

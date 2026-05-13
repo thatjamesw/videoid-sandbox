@@ -89,8 +89,9 @@ npm start
 ## Credential Notes
 
 The hosted version is a static page, so credentials you enter there are visible to that page's
-JavaScript while the browser session is active. They are stored in `sessionStorage` and are not
-committed to this repository.
+JavaScript while the browser session is active. They are stored in browser session storage plus a
+same-origin session cookie so the hosted callback can read them after the Signicat redirect. They
+are not committed to this repository and are not written with an explicit expiry.
 
 The local version keeps environment credentials server-side and proxies `/api/*` requests to
 Signicat. Credentials pasted into the local UI are stored only in memory while the local server is

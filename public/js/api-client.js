@@ -1,6 +1,7 @@
 import { state } from "./state.js";
 
 const SESSION_STORAGE_KEY = "videoidSandboxSession";
+const SESSION_COOKIE_KEY = "videoidSandboxSessionCookie";
 const RATE_STORAGE_KEY = "videoidSandboxRateWindow";
 const STATIC_MAX_CONCURRENT_REQUESTS = 2;
 const STATIC_MIN_REQUEST_GAP_MS = 750;
@@ -44,10 +45,79 @@ function getDefaultRedirectUrl() {
 }
 
 export function loadStaticAuth() {
+  const cookieAuth = readSessionCookieAuth();
+  if (cookieAuth) {
+    return cookieAuth;
+  }
+
   try {
     return JSON.parse(sessionStorage.getItem(SESSION_STORAGE_KEY) || "{}");
   } catch (_error) {
     return {};
+  }
+}
+
+function readSessionCookieAuth() {
+  const cookie = document.cookie
+    .split("; ")
+    .find((entry) => entry.startsWith(`${SESSION_COOKIE_KEY}=`));
+
+  if (!cookie) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(decodeURIComponent(cookie.slice(SESSION_COOKIE_KEY.length + 1)));
+  } catch (_error) {
+    return null;
+  }
+}
+
+function writeSessionCookieAuth(auth) {
+  const secureFlag = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${SESSION_COOKIE_KEY}=${encodeURIComponent(
+    JSON.stringify(auth)
+  )}; Path=${getCookiePath()}; SameSite=Lax${secureFlag}`;
+}
+
+function clearSessionCookieAuth() {
+  document.cookie = `${SESSION_COOKIE_KEY}=; Path=${getCookiePath()}; Max-Age=0; SameSite=Lax`;
+}
+
+function getCookiePath() {
+  const path = window.location.pathname;
+  if (path.endsWith("/")) {
+    return path;
+  }
+
+  const slashIndex = path.lastIndexOf("/");
+  if (slashIndex === -1) {
+    return "/";
+  }
+
+  return path.slice(0, slashIndex + 1) || "/";
+}
+
+function clearPersistentStaticAuth() {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("videoidSandboxPersistentSession")) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch (_error) {
+    // Ignore unavailable storage.
+  }
+}
+
+function persistStaticAuth(auth) {
+  clearPersistentStaticAuth();
+  writeSessionCookieAuth(auth);
+
+  try {
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(auth));
+  } catch (_error) {
+    // Session storage is a fallback only; ignore if unavailable.
   }
 }
 
@@ -56,17 +126,20 @@ function saveStaticAuth(auth) {
     ...auth,
     staticMode: true,
   };
-  sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state.staticAuth));
+  persistStaticAuth(state.staticAuth);
 }
 
 function clearStaticAuth() {
+  clearPersistentStaticAuth();
+  clearSessionCookieAuth();
+
   state.staticAuth = {
     apiBaseUrl: "https://api.signicat.com",
     authMode: "client_credentials",
     expectedIdNumber: "",
     staticMode: true,
   };
-  sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state.staticAuth));
+  persistStaticAuth(state.staticAuth);
 }
 
 export function buildStaticSettings() {
@@ -84,7 +157,7 @@ export function buildStaticSettings() {
     hasClientSecret: Boolean(auth.clientSecret || auth.apiToken),
     appBaseUrl: window.location.origin,
     defaultRedirectUrl: getDefaultRedirectUrl(),
-    authSource: "browser session",
+    authSource: "this browser",
     tokenConfigured: hasApiToken,
     clientCredentialsConfigured: hasClientCredentials,
     expectedIdNumber: auth.expectedIdNumber || "",
@@ -307,7 +380,7 @@ async function staticApi(path, options = {}) {
       expectedIdNumber: String(body.expectedIdNumber || "").trim(),
     });
     return {
-      message: "Connection settings saved for this browser session only.",
+      message: "Connection settings saved in this browser for hosted callbacks.",
       settings: buildStaticSettings(),
     };
   }
@@ -315,7 +388,7 @@ async function staticApi(path, options = {}) {
   if (method === "DELETE" && path === "/api/settings") {
     clearStaticAuth();
     return {
-      message: "Browser-session connection settings cleared.",
+      message: "Browser connection settings cleared.",
       settings: buildStaticSettings(),
     };
   }

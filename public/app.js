@@ -637,7 +637,7 @@ async function main() {
   setResult(
     "authResult",
     state.apiMode === "static"
-      ? "Static browser mode is active. Connection settings are stored only in this browser session."
+      ? "Static browser mode is active. Connection settings are stored in this browser for hosted callbacks."
       : "Connection settings are using the current server defaults."
   );
   setSignicatDebug("documentTypesDebug", null);
